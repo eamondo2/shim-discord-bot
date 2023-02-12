@@ -1,0 +1,17 @@
+{
+  "name": "shim-discord-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "type": "module",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.7.1",
+    "got": "^12.5.3",
+    "node-mpv": "^1.5.0"
+  }
+}
