@@ -14,7 +14,7 @@ local options = {
     categories = "sponsor,intro,outro,interaction,selfpromo,filler",
 
     -- Categories to skip automatically
-    skip_categories = "sponsor",
+    skip_categories = "sponsor,selfpromo",
 
     -- If true, sponsored segments will only be skipped once
     skip_once = true,
