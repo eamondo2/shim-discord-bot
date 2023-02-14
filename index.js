@@ -85,22 +85,35 @@ async function createControlMessage() {
  * MPV Player events/handling
  * ===================================
  */
-let mpvPlayer = new mpv({
-    verbose: true,
-    debug: true,
-    audio_only: false,
-    binary: "./mpv/mpv.exe",
-},
-[
-    "--force-window=immediate",
-    "--keep-open=yes"
-]
-);
+let mpvPlayer;
+let mpvOpts = {
+    verbose: false,
+    debug: false,
+    audio_only: false
+};
+if (process.platform === "win32") {
+    mpvPlayer = new mpv(
+    Object.assign(mpvOpts, {binary: "./mpv/mpv.exe"}),
+    [
+        "--force-window=immediate",
+        "--keep-open=yes",
+        "--config-dir=./mpv/portable_config"
+    ]
+    );
+} else {
+    mpvPlayer = new mpv(mpvOpts,
+    [
+        "--force-window=immediate",
+        "--keep-open=yes",
+        "--config-dir=./mpv/portable_config"
+    ]
+    );
+}
 
 let playerStatusObject = {};
 
 mpvPlayer.on('statuschange', async (data) => {
-    console.log(data);
+    // console.log(data);
     playerStatusObject = data;
 });
 
@@ -169,6 +182,8 @@ client.on(Events.MessageCreate, async (message) => {
 
 //Listen for reactions, trigger controls.
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
+    //Whoopsie
+    if (reaction.message.channelId !== conf.CHANNEL_ID) return;
     if (user.id === client.user.id) return;
     let emoji;
     if (emoji = Object.keys(controlsEnum).find((value, idx) => {
