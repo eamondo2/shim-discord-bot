@@ -1,10 +1,9 @@
 import mpv from "node-mpv";
-import got from "got";
 import fs from "fs";
 import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField} from "discord.js";
 
-
 const conf = JSON.parse(fs.readFileSync("config.json"));
+const token = JSON.parse(fs.readFileSync("bot-token.json")).token;
 
 const defaultControlList = [
     '⏯', '⏹️', '⏮️', '⏭️', 
@@ -17,6 +16,16 @@ const controlsEnum = {
     '⏭️': 'next'
 };
 
+let currentBotQueue = [];
+
+let oldControlMessage;
+
+/**
+ * ===================================
+ * Helper functions
+ * ===================================
+ */
+
 function isYTLink(url) {
     if (url.indexOf("youtu.be") > 0) return true;
     if (url.indexOf("youtube.com") > 0) return true;
@@ -25,44 +34,6 @@ function isYTLink(url) {
     }
     return false;
 }
-
-let mpvPlayer = new mpv({
-    verbose: true,
-    debug: true,
-    audio_only: false,
-    binary: "./mpv/mpv.exe",
-},
-[
-    "--force-window=immediate",
-    "--keep-open=yes"
-]
-);
-
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, IntentsBitField.Flags.GuildMessages, IntentsBitField.Flags.MessageContent, IntentsBitField.Flags.GuildMessageReactions],
-    presence: {
-        status: "online",
-        activities: [
-            {
-                name: "for YT links",
-                type: ActivityType.Watching,
-
-            }
-        ]
-    }
-});
-
-
-let currentBotQueue = [];
-
-let oldControlMessage;
-
-
-client.once(Events.ClientReady, async c => {
-    console.log(`Ready, logged in as ${c.user.tag}`);
-    await cleanupChannel();
-    
-});
 
 async function cleanupChannel() {
     console.log('cleanup start');
@@ -86,27 +57,6 @@ async function cleanupChannel() {
     console.log('cleanup end');
 }
 
-async function purgeMessages() {
-    let monitorChannel = await client.channels.fetch(conf.CHANNEL_ID);
-    let filterFunc = m => m.author.id !== client.user.id;
-    let messageCollector = monitorChannel.createMessageCollector({filter: filterFunc, time: 15_000 });
-    let purgeQueue = [];
-    messageCollector.on('collect', m => {
-        console.log(`collected: ${m.content} author: ${m.author.id}`);
-    });
-    messageCollector.on('end', async collected => {
-        console.log(`collected ${collected.size} items`);
-        purgeQueue.concat(collected);
-    });
-    console.log(purgeQueue);
-    await monitorChannel.bulkDelete(purgeQueue);
-
-}
-
-mpvPlayer.on('statuschange', async (data) => {
-    console.log(data);
-});
-
 async function createControlMessage() {
     let channel = await client.channels.fetch(conf.CHANNEL_ID);
     if (oldControlMessage) {
@@ -127,6 +77,78 @@ async function createControlMessage() {
     }
 }
 
+
+
+
+/**
+ * ===================================
+ * MPV Player events/handling
+ * ===================================
+ */
+let mpvPlayer = new mpv({
+    verbose: true,
+    debug: true,
+    audio_only: false,
+    binary: "./mpv/mpv.exe",
+},
+[
+    "--force-window=immediate",
+    "--keep-open=yes"
+]
+);
+
+let playerStatusObject = {};
+
+mpvPlayer.on('statuschange', async (data) => {
+    console.log(data);
+    playerStatusObject = data;
+});
+
+mpvPlayer.socket.on('message', async (data) => {
+    if (data.hasOwnProperty("event")) {
+        switch (data.event) {
+            //Catch hitting "next" or "previous" while player is paused, and start playback once video is loaded.
+            case "playback-restart":
+                if (playerStatusObject && playerStatusObject.pause) {
+                    mpvPlayer.resume();
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+}); 
+
+
+/**
+ * ==================================
+ * discord.js client events/handling
+ * ==================================
+ */
+
+const client = new Client({
+    intents: [GatewayIntentBits.Guilds, IntentsBitField.Flags.GuildMessages, IntentsBitField.Flags.MessageContent, IntentsBitField.Flags.GuildMessageReactions],
+    presence: {
+        status: "online",
+        activities: [
+            {
+                name: "for YT links",
+                type: ActivityType.Watching,
+
+            }
+        ]
+    }
+});
+
+client.once(Events.ClientReady, async c => {
+    console.log(`Ready, logged in as ${c.user.tag}`);
+    //Initial channel cleanup, purge old control message.
+    await cleanupChannel();
+    
+});
+
+//Listen for messages, trigger queue change and player queue additions
 client.on(Events.MessageCreate, async (message) => {
     if (message.author.id === client.user.id) return;
     if (message.channelId === conf.CHANNEL_ID) {
@@ -145,8 +167,7 @@ client.on(Events.MessageCreate, async (message) => {
     }
 });
 
-
-
+//Listen for reactions, trigger controls.
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (user.id === client.user.id) return;
     let emoji;
@@ -159,7 +180,9 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
                 break;
             case 'stop':
                 mpvPlayer.stop();
-                break;
+                currentBotQueue = [];
+                await createControlMessage();
+                return;
             case 'previous':
                 mpvPlayer.prev();
                 break;
@@ -176,6 +199,5 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
 
 })
 
-let token = JSON.parse(fs.readFileSync("bot-token.json")).token;
 
 client.login(token);
