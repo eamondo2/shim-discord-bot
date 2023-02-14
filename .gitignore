@@ -11,3 +11,10 @@ mpv/yt-dlp.exe
 mpv/7z/7zr.exe
 mpv/doc/manual.pdf
 mpv/installer/updater.ps1
+mpv/mpv/fonts.conf
+mpv/installer/mpv-uninstall.bat
+mpv/installer/mpv-install.bat
+mpv/installer/mpv-icon.ico
+mpv/installer/configure-opengl-hq.bat
+mpv/doc/mpbindings.png
+mpv/d3dcompiler_43.dll
