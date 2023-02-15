@@ -511,6 +511,9 @@ client.once(Events.ClientReady, async c => {
 
 client.on(Events.InteractionCreate, async interaction => {
 
+    
+    if (!interaction.channel.id === conf.CHANNEL_ID) return;
+
     let controlIDParts = interaction.customId.split('-');
     let queue_pos = Number.parseInt(controlIDParts[0]);
     let control_command = controlIDParts[1];
