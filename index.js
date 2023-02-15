@@ -330,8 +330,10 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
     if (currentBotQueue.length <= 1) return;
     let pool = [];
     
-    let old_is_control_message = queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1;
-    let new_is_control_message = queue_pos_old === playerStatusObject['playlist-count'] - 1;
+    let new_is_control_message = queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1;
+    let old_is_control_message = queue_pos_old === playerStatusObject['playlist-count'] - 1;
+
+    console.log(old_is_control_message, new_is_control_message);
 
     let new_pos_embed = queueMessageList[queue_pos_new].embeds[0];
     let new_pos_actionRowA = createActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
@@ -511,7 +513,7 @@ client.once(Events.ClientReady, async c => {
 
 client.on(Events.InteractionCreate, async interaction => {
 
-    
+
     if (!interaction.channel.id === conf.CHANNEL_ID) return;
 
     let controlIDParts = interaction.customId.split('-');
@@ -610,9 +612,7 @@ client.on(Events.InteractionCreate, async interaction => {
         mpvPlayer.next();
         break;
     case 'jumphere': 
-        //TODO: handle queue position jump
         if (queue_pos <= currentBotQueue.length - 1) {
-            console.log(queue_pos);
             mpvPlayer.socket.command("playlist-play-index", [queue_pos]);
         } else {
             console.error("Invalid queue position");
@@ -670,45 +670,6 @@ client.on(Events.MessageCreate, async (message) => {
     }
 });
 
-//Listen for reactions, trigger controls.
-client.on(Events.MessageReactionAdd, async (reaction, user) => {
-    //Whoopsie
-    if (reaction.message.channelId !== conf.CHANNEL_ID) return;
-    if (user.id === client.user.id) return;
-    if (reaction.message.id !== queueMessageList[queueMessageList.length - 1].id) return;
-
-    let emoji;
-    if (emoji = Object.keys(controlsEnum).find((value, idx) => {
-        if (value === reaction.emoji.name) return true;
-    })) {
-        switch (controlsEnum[emoji]){
-            case 'play-pause': 
-                mpvPlayer.togglePause();
-                break;
-            case 'stop':
-                mpvPlayer.stop();
-                currentBotQueue = [];
-                processedLinkList = [];
-                queueMessageList = [];
-                currentControlMessage = null;
-                cleanupChannel();
-
-                return;
-            case 'previous':
-                mpvPlayer.prev();
-                break;
-            case 'next':
-                mpvPlayer.next();
-                break;
-            default:
-                console.log('no valid command found');
-                break;
-        }
-    }
-
-    reaction.users.remove(user);
-
-})
 
 
 client.login(token);
