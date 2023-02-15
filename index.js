@@ -2,7 +2,7 @@ import mpv from "node-mpv";
 import fs from "fs";
 import got from "got";
 import ytdl from "ytdl-core";
-import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors} from "discord.js";
+import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageComponentInteraction, ActionRow, Emoji} from "discord.js";
 import { Message } from "discord.js";
 import { Embed } from "discord.js";
 
@@ -21,7 +21,7 @@ const controlsEnum = {
 };
 
 //Array of created embed objects. Index values match queue position of video.
-/** @type {[{queue_pos: number, message_sent: boolean, embed: Embed}]} */
+/** @type {[{queue_pos: number, message_sent: boolean, embed: Embed, actionRow: ActionRow}]} */
 let currentBotQueue = [];
 //Stash processed links, post-scrape and embed creation
 /** @type {[string]} */
@@ -33,8 +33,16 @@ let queueMessageList = [];
 /** @type {Message} */
 let currentControlMessage = null;
 
+/** @type {{queue_pos: number, message_sent: boolean, embed: Embed, actionRow: ActionRow}} */
+let currentEmbedObj = null;
+
 /** @type {TextChannel} */
 let channel = null;
+
+
+let playerStatusObject = {};
+
+let cur_playlist_pos, old_playlist_pos;
 
 /**
  * ===================================
@@ -93,16 +101,74 @@ function grabYtVideoID(video_url) {
 
 }
 
+function createActionRow(queue_pos, is_control_message = false) {
+    let actionRow;
+    console.log(queue_pos, cur_playlist_pos, is_control_message);
+    if (is_control_message) {
+        actionRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`${queue_pos}-playpause`)
+                    .setEmoji('⏯')
+                    .setStyle(ButtonStyle.Primary)
+            )
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`${queue_pos}-stop`)
+                    .setEmoji('⏹️')
+                    .setStyle(ButtonStyle.Primary)
+            )
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`${queue_pos}-prev`)
+                    .setEmoji('⏮️')
+                    .setStyle(ButtonStyle.Primary)
+            )
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`${queue_pos}-next`)
+                    .setEmoji('⏭️')
+                    .setStyle(ButtonStyle.Primary)
+            );
+            if (cur_playlist_pos !== queue_pos) {
+
+                actionRow.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`${queue_pos}-jumphere`)
+                        .setLabel('Jump')
+                        .setStyle(ButtonStyle.Primary)
+                )
+            }
+    } else if (cur_playlist_pos !== queue_pos) {
+        actionRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`${queue_pos}-jumphere`)
+                    .setLabel('Jump')
+                    .setStyle(ButtonStyle.Primary)
+            )
+            
+    }
+
+    console.log(actionRow);
+
+    return actionRow;
+       
+}
+
 function createQueueEntryEmbed(thumbnail_link, video_url, video_title, video_author, queue_pos) {
-    console.log(queue_pos);
+
+    let actionRow = createActionRow(queue_pos, queue_pos == playerStatusObject['playlist-count'] - 1);
+
     let newEmbed = new EmbedBuilder()
         .setTitle(`${video_author} - ${video_title}`)
-        .setColor(queue_pos <= 1 ? Colors.DarkRed : Colors.DarkAqua)
+        .setColor(queue_pos < 1 ? Colors.DarkRed : Colors.DarkAqua)
         .setURL(video_url)
         .setThumbnail(thumbnail_link)
         .setImage(thumbnail_link);
     
-    return {queue_pos, message_sent: false, embed: newEmbed};
+
+    return {queue_pos, message_sent: false, embed: newEmbed, actionRow};
 
 }
 
@@ -111,7 +177,7 @@ async function processLink(url) {
     let ytdlInfo = await ytdl.getBasicInfo(url);
     let author = ytdlInfo.videoDetails.author.name;
     let title = ytdlInfo.videoDetails.title;
-    let queue_pos = currentBotQueue.length + 1;
+    let queue_pos = currentBotQueue.length;
     let thumbnail_link = await validateYtThumbnailUrl(grabYtVideoID(url));
     if (!thumbnail_link) {
         console.error(`Cannot get thumbnail, skipping for video ${url}`);
@@ -129,74 +195,174 @@ async function sendQueueMessage() {
     for (let pendingSent of currentBotQueue) {
         if (pendingSent.message_sent) continue;
         pendingSent.message_sent = true;
-        let sendMessageResponse = await channel.send({
-            embeds: [pendingSent.embed]
-        });
+        let sendMessageResponse;
+        if (pendingSent.actionRow) {
+            sendMessageResponse = await channel.send({
+                embeds: [pendingSent.embed],
+                components: [pendingSent.actionRow]
+            });
+        } else {
+            sendMessageResponse = await channel.send({
+                embeds: [pendingSent.embed]
+            });
+        }
 
         queueMessageList.push(sendMessageResponse);
-
+        if (queueMessageList.length == 1) {
+            currentControlMessage = sendMessageResponse;
+            currentEmbedObj = pendingSent;
+        }
     }
+
 }
 
 async function updateControlMessage() {
-    if (queueMessageList.length <= 0) {
+    if (queueMessageList.length <= 1) {
         console.log('No queue items to attach controls to');
         //TODO: create dummy message just to have controls
         return;
     }
 
+
     let newControlMessage = queueMessageList[queueMessageList.length - 1];
-    
+    let newEmbedObj = currentBotQueue[currentBotQueue.length - 1];
+
     let pool = [];
+    let new_pos_embed = newControlMessage.embeds[0];
+    let new_pos_actionRow = createActionRow(newEmbedObj.queue_pos, true);
 
-    for (let message of queueMessageList) {
-        if (message.id !== newControlMessage) {
-            pool.push(message.reactions.removeAll());
-        }
+    let old_pos_embed = currentControlMessage.embeds[0];
+    let old_pos_actionRow = createActionRow(currentEmbedObj.queue_pos, false);
+    
+    if (new_pos_actionRow) {
+        pool.push(
+            newControlMessage.edit(
+                {
+                    embeds: [
+                        new_pos_embed
+                    ],
+                    components: [
+                        new_pos_actionRow
+                    ]
+                }
+            )
+        );
+    } else {
+        pool.push(
+            newControlMessage.edit(
+                {
+                    embeds: [
+                        new_pos_embed
+                    ]
+                }
+            )
+        );
+
     }
-
-    for (let reaction of defaultControlList) {
-        pool.push(newControlMessage.react(reaction));
+    if (old_pos_actionRow) {
+        pool.push(
+            currentControlMessage.edit(
+                {
+                    embeds: [
+                        old_pos_embed
+                    ],
+                    components: [
+                        old_pos_actionRow
+                    ]
+                }
+            )
+        );
+    } else {
+        pool.push(
+            currentControlMessage.edit(
+                {
+                    embeds: [
+                        old_pos_embed
+                    ],
+                    components: []
+                }
+            )
+        );
     }
-
-    await Promise.all(pool);
 
     currentControlMessage = newControlMessage;
+    currentEmbedObj = newEmbedObj;
+
+    let results = await Promise.all(pool);
+    
+    return;
 
 }
 
 async function updateQueueIndex(queue_pos_new, queue_pos_old) {
-    console.log(queue_pos_new, queue_pos_old);
     if (currentBotQueue.length <= 1) return;
     let pool = [];
     
     let new_pos_embed = queueMessageList[queue_pos_new].embeds[0];
+    let new_pos_actionRow = createActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
     new_pos_embed = EmbedBuilder.from(new_pos_embed).setColor(Colors.DarkRed);
+
     let old_pos_embed = queueMessageList[queue_pos_old].embeds[0];
+    let old_pos_actionRow = createActionRow(queue_pos_old, queue_pos_old === playerStatusObject['playlist-count'] - 1);
     old_pos_embed = EmbedBuilder.from(old_pos_embed).setColor(Colors.DarkAqua);
-       
-    pool.push(
-        queueMessageList[queue_pos_new].edit(
-            {
-                embeds: [
-                    new_pos_embed
-                ]
-            }
-        )
-    );
     
-    pool.push(
-        queueMessageList[queue_pos_old].edit(
-            {
-                embeds: [
-                    old_pos_embed
-                ]
-            }
-        )
-    );
+    if (new_pos_actionRow) {
+
+        pool.push(
+            queueMessageList[queue_pos_new].edit(
+                {
+                    embeds: [
+                        new_pos_embed
+                    ],
+                    components: [
+                        new_pos_actionRow
+                    ]
+                }
+            )
+        );
+    } else {
+        pool.push(
+            queueMessageList[queue_pos_new].edit(
+                {
+                    embeds: [
+                        new_pos_embed
+                    ],
+                    components: []
+                }
+            )
+        );
+
+    }
+    
+
+    if (old_pos_actionRow) {
+
+        pool.push(
+            queueMessageList[queue_pos_old].edit(
+                {
+                    embeds: [
+                        old_pos_embed
+                    ],
+                    components: [
+                        old_pos_actionRow
+                    ]
+                }
+            )
+        );
+    } else {
+        pool.push(
+            queueMessageList[queue_pos_old].edit(
+                {
+                    embeds: [
+                        old_pos_embed
+                    ],
+                    components: []
+                }
+            )
+        );
+    }
 
     let results = await Promise.all(pool);
-    console.log(results);
 
 }
 
@@ -214,8 +380,8 @@ async function addToQueue(url) {
  */
 let mpvPlayer;
 let mpvOpts = {
-    verbose: false,
-    debug: false,
+    verbose: true,
+    debug: true,
     audio_only: false
 };
 if (process.platform === "win32") {
@@ -237,9 +403,6 @@ if (process.platform === "win32") {
     );
 }
 
-let playerStatusObject = {};
-
-let cur_playlist_pos, old_playlist_pos;
 
 mpvPlayer.on('statuschange', async (data) => {
     // console.log(data);
@@ -302,6 +465,56 @@ client.once(Events.ClientReady, async c => {
     //Initial channel cleanup, purge old control message.
     await cleanupChannel();
     
+});
+
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isButton()) return;
+    
+    interaction.reply({
+        ephemeral: true,
+        content: "Paused"
+        
+    }).then(() => {
+        setTimeout( () => interaction.deleteReply(), 250);
+    });
+
+    let controlIDParts = interaction.customId.split('-');
+    let queue_pos = Number.parseInt(controlIDParts[0]);
+    let control_command = controlIDParts[1];
+
+    switch (control_command) {
+    case 'playpause': 
+        mpvPlayer.togglePause();
+        break;
+    case 'stop':
+        mpvPlayer.stop();
+        currentBotQueue = [];
+        processedLinkList = [];
+        queueMessageList = [];
+        currentControlMessage = null;
+        cleanupChannel();
+
+        return;
+    case 'prev':
+        mpvPlayer.prev();
+        break;
+    case 'next':
+        mpvPlayer.next();
+        break;
+    case 'jumphere': 
+        //TODO: handle queue position jump
+        if (queue_pos <= currentBotQueue.length - 1) {
+            console.log(queue_pos);
+            mpvPlayer.socket.command("playlist-play-index", [queue_pos]);
+        } else {
+            console.error("Invalid queue position");
+        }
+        break;
+    default:
+        console.log('no valid command found');
+        break;
+    }
+
 });
 
 //Listen for messages, trigger queue change and player queue additions
