@@ -104,7 +104,10 @@ function parseYTVideoUrl(video_url) {
             if (m[11] !== 'playlist'){
                 has_single_video = true;
             }
+        } else {
+            return {url: `https://youtube.com/watch?v=${m[11]}`, id: m[11], is_playlist, has_single_video};
         }
+        
     }
 
     if (is_playlist && has_single_video) {
@@ -118,6 +121,8 @@ function parseYTVideoUrl(video_url) {
     if (is_playlist && !has_single_video) {
         return {url: `https://youtube.com/playlist?list=${m[16]}`, id: m[16], is_playlist, has_single_video};
     }
+
+    console.log(is_playlist, has_single_video);
 
     return null;
 
@@ -692,6 +697,18 @@ client.on(Events.MessageCreate, async (message) => {
                 message.delete()
             ]);
 
+        } else if (message.content.includes('live') && message.content.includes('youtube.com')) {
+                //Could just be a live video shared, ytdl doesn't like those for some reason
+                console.log('re-parsing live shared video link');
+                let parsedUrl = parseYTVideoUrl(message.content);
+                let reformatUrl = `https://youtube.com/watch?v=${parsedUrl.id}`;
+                if (ytdl.validateURL(reformatUrl)) {
+                    console.log('re-parse succeeded.');
+                    await Promise.all([
+                        addToQueue(reformatUrl),
+                        message.delete()
+                    ]);
+                }
         } else {
             console.log("Rejecting invalid url");
             channel.send({
