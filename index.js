@@ -90,13 +90,35 @@ async function validateYtThumbnailUrl(video_id) {
     return null;
 }
 
-function grabYtVideoID(video_url) {
+function parseYTVideoUrl(video_url) {
     //Big nasty regex because why not
-    const regex = /(https:\/\/)(www\.)?(((youtube\.com\/)|(youtu\.be\/)){1})((watch\?v=)|(shorts\/))?([a-zA-Z0-9_]*)((\?[a-z]=\d*)|(\?[a-z]*=[a-z]*))?/gm;
+    const regex = /(https:\/\/)(www\.)?(((youtube\.com\/)|(youtu\.be\/)){1})((watch\?v=)|(shorts\/)|(live\/))?([a-zA-Z0-9_-]*)((\?[a-z]=\d*)|(\?[a-z]*=[a-z]*)|)?(\&list=)?([a-zA-Z0-9_-]*)?/gm;
     let m = regex.exec(video_url);
-    if (m && m.length >= 10) {
-        return m[10];
+    let is_playlist = false;
+    let has_single_video = false;
+    if (m && m.length >= 16 && m[16]) {
+        is_playlist = true;
     }
+    if (m && m.length >= 11 && m[11]) {
+        if (is_playlist) {
+            if (m[11] !== 'playlist'){
+                has_single_video = true;
+            }
+        }
+    }
+
+    if (is_playlist && has_single_video) {
+        return {url: `https://youtube.com/watch?v=${m[11]}`, id: m[11], is_playlist, has_single_video};
+    }
+
+    if (!is_playlist && has_single_video) {
+        return {url: video_url, id: m[11], is_playlist, has_single_video};
+    }
+
+    if (is_playlist && !has_single_video) {
+        return {url: `https://youtube.com/playlist?list=${m[16]}`, id: m[16], is_playlist, has_single_video};
+    }
+
     return null;
 
 }
@@ -198,22 +220,24 @@ function createQueueEntryEmbed(thumbnail_link, video_url, video_title, video_aut
 
 }
 
-async function processLink(url) {
+async function processLink(url, parsed) {
 
     let ytdlInfo = await ytdl.getBasicInfo(url);
     let author = ytdlInfo.videoDetails.author.name;
     let title = ytdlInfo.videoDetails.title;
     let queue_pos = currentBotQueue.length;
-    let thumbnail_link = await validateYtThumbnailUrl(grabYtVideoID(url));
+    
+    let thumbnail_link = await validateYtThumbnailUrl(parsed.id);
+
     if (!thumbnail_link) {
         console.error(`Cannot get thumbnail, skipping for video ${url}`);
     }
 
-    currentBotQueue.push(createQueueEntryEmbed(thumbnail_link, url, title, author, queue_pos));
+    currentBotQueue.push(createQueueEntryEmbed(thumbnail_link, parsed.url, title, author, queue_pos));
 
 
 
-    processedLinkList.push(url);
+    processedLinkList.push(parsed.url);
 }   
 
 async function sendQueueMessage() {
@@ -411,8 +435,10 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
 }
 
 async function addToQueue(url) {
-    mpvPlayer.load(url, "append-play");
-    await processLink(url);
+    let YTVideoUrlParsed = parseYTVideoUrl(url);
+    console.log(YTVideoUrlParsed);
+    mpvPlayer.load(YTVideoUrlParsed.url, "append-play");
+    await processLink(url, YTVideoUrlParsed);
     await sendQueueMessage();
     await updateControlMessage();
 }
@@ -666,6 +692,20 @@ client.on(Events.MessageCreate, async (message) => {
                 message.delete()
             ]);
 
+        } else {
+            console.log("Rejecting invalid url");
+            channel.send({
+                content: "Invalid video URL. Either you sent a non-youtube link, or you sent a link to a playlist.\nCannot play full playlists at the moment.",
+                tts: false,
+                reply: {
+                    messageReference: message.id
+                }
+            }).then((reply_msg) => {
+                setTimeout(() => {
+                    reply_msg.delete();
+                    message.delete();
+                }, 20000);
+            });
         }
     }
 });
