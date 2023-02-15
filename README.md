@@ -1,6 +1,6 @@
 # Install/setup
 
-Run `./choco-setup.ps1` while in the repo folder.
+Run `./choco-setup.ps1` while in the repo folder. You may need to enable running PS Scripts from unsigned sources, else Windows will be mad at you.
 
 Accept all default options when prompted, yt-dlp is preinstalled via chocolatey.
 
@@ -14,6 +14,7 @@ nvm is then used to get the latest nodejs version, and set that as active.
 
 Just set the `CHANNEL_ID` field in `config.template.json` to the channel name you want the bot to watch, saving the file as `config.json`.
 
+Set the `token` field in `bot-token.template.json` to your Discord bot token, and save the file as `bot-token.json`.
+
 Then run the bot via `node index.js`
 
-Set the `token` field in `bot-token.template.json` to your Discord bot token, and save the file as `bot-token.json`.
