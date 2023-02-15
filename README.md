@@ -16,3 +16,4 @@ Just set the `CHANNEL_ID` field in `config.template.json` to the channel name yo
 
 Then run the bot via `node index.js`
 
+Set the `token` field in `bot-token.template.json` to your Discord bot token, and save the file as `bot-token.json`.
