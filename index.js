@@ -2,7 +2,7 @@ import mpv from "node-mpv";
 import fs from "fs";
 import got from "got";
 import ytdl from "ytdl-core";
-import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageComponentInteraction, ActionRow, Emoji} from "discord.js";
+import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageComponentInteraction, ActionRow, Emoji, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, ModalBuilder} from "discord.js";
 import { Message } from "discord.js";
 import { Embed } from "discord.js";
 
@@ -21,7 +21,7 @@ const controlsEnum = {
 };
 
 //Array of created embed objects. Index values match queue position of video.
-/** @type {[{queue_pos: number, message_sent: boolean, embed: Embed, actionRow: ActionRow}]} */
+/** @type {[{queue_pos: number, message_sent: boolean, embed: Embed, actionRowA: ActionRow, actionRowB: ActionRow}]} */
 let currentBotQueue = [];
 //Stash processed links, post-scrape and embed creation
 /** @type {[string]} */
@@ -33,7 +33,7 @@ let queueMessageList = [];
 /** @type {Message} */
 let currentControlMessage = null;
 
-/** @type {{queue_pos: number, message_sent: boolean, embed: Embed, actionRow: ActionRow}} */
+/** @type {{queue_pos: number, message_sent: boolean, embed: Embed, actionRowA: ActionRow, actionRowB: ActionRow}} */
 let currentEmbedObj = null;
 
 /** @type {TextChannel} */
@@ -101,9 +101,35 @@ function grabYtVideoID(video_url) {
 
 }
 
+function createSeekActionRow(queue_pos, is_control_message = false) {
+    let actionRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${queue_pos}-rev30`)
+                .setStyle(ButtonStyle.Secondary)
+                .setLabel("<==30"),
+            new ButtonBuilder()
+                .setCustomId(`${queue_pos}-rev15`)
+                .setStyle(ButtonStyle.Secondary)
+                .setLabel("<==15"),
+            new ButtonBuilder()
+                .setCustomId(`${queue_pos}-fwd15`)
+                .setStyle(ButtonStyle.Secondary)
+                .setLabel("15==>"),
+            new ButtonBuilder()
+                .setCustomId(`${queue_pos}-fwd30`)
+                .setStyle(ButtonStyle.Secondary)
+                .setLabel("30==>"),
+            new ButtonBuilder()
+                .setCustomId(`${queue_pos}-customseek`)
+                .setStyle(ButtonStyle.Secondary)
+                .setLabel("Seek Custom")
+        );
+    return actionRow;
+}
+
 function createActionRow(queue_pos, is_control_message = false) {
     let actionRow;
-    console.log(queue_pos, cur_playlist_pos, is_control_message);
     if (is_control_message) {
         actionRow = new ActionRowBuilder()
             .addComponents(
@@ -150,7 +176,6 @@ function createActionRow(queue_pos, is_control_message = false) {
             
     }
 
-    console.log(actionRow);
 
     return actionRow;
        
@@ -158,7 +183,8 @@ function createActionRow(queue_pos, is_control_message = false) {
 
 function createQueueEntryEmbed(thumbnail_link, video_url, video_title, video_author, queue_pos) {
 
-    let actionRow = createActionRow(queue_pos, queue_pos == playerStatusObject['playlist-count'] - 1);
+    let actionRowA = createActionRow(queue_pos, queue_pos == playerStatusObject['playlist-count'] - 1);
+    let actionRowB = createSeekActionRow(queue_pos, queue_pos == playerStatusObject['playlist-count'] - 1);
 
     let newEmbed = new EmbedBuilder()
         .setTitle(`${video_author} - ${video_title}`)
@@ -168,7 +194,7 @@ function createQueueEntryEmbed(thumbnail_link, video_url, video_title, video_aut
         .setImage(thumbnail_link);
     
 
-    return {queue_pos, message_sent: false, embed: newEmbed, actionRow};
+    return {queue_pos, message_sent: false, embed: newEmbed, actionRowA, actionRowB};
 
 }
 
@@ -196,10 +222,10 @@ async function sendQueueMessage() {
         if (pendingSent.message_sent) continue;
         pendingSent.message_sent = true;
         let sendMessageResponse;
-        if (pendingSent.actionRow) {
+        if (pendingSent.actionRowA) {
             sendMessageResponse = await channel.send({
                 embeds: [pendingSent.embed],
-                components: [pendingSent.actionRow]
+                components: [pendingSent.actionRowA, pendingSent.actionRowB]
             });
         } else {
             sendMessageResponse = await channel.send({
@@ -229,12 +255,14 @@ async function updateControlMessage() {
 
     let pool = [];
     let new_pos_embed = newControlMessage.embeds[0];
-    let new_pos_actionRow = createActionRow(newEmbedObj.queue_pos, true);
+    let new_pos_actionRowA = createActionRow(newEmbedObj.queue_pos, true);
+    let new_pos_actionRowB = createSeekActionRow(newEmbedObj.queue_pos, true);
 
     let old_pos_embed = currentControlMessage.embeds[0];
-    let old_pos_actionRow = createActionRow(currentEmbedObj.queue_pos, false);
+    let old_pos_actionRowA = createActionRow(currentEmbedObj.queue_pos, false);
+    let old_pos_actionRowB = createSeekActionRow(currentEmbedObj.queue_pos, false);
     
-    if (new_pos_actionRow) {
+    if (new_pos_actionRowA) {
         pool.push(
             newControlMessage.edit(
                 {
@@ -242,7 +270,8 @@ async function updateControlMessage() {
                         new_pos_embed
                     ],
                     components: [
-                        new_pos_actionRow
+                        new_pos_actionRowA,
+                        new_pos_actionRowB
                     ]
                 }
             )
@@ -253,13 +282,15 @@ async function updateControlMessage() {
                 {
                     embeds: [
                         new_pos_embed
+                    ],
+                    components: [
                     ]
                 }
             )
         );
 
     }
-    if (old_pos_actionRow) {
+    if (old_pos_actionRowA) {
         pool.push(
             currentControlMessage.edit(
                 {
@@ -267,7 +298,7 @@ async function updateControlMessage() {
                         old_pos_embed
                     ],
                     components: [
-                        old_pos_actionRow
+                        old_pos_actionRowA
                     ]
                 }
             )
@@ -279,7 +310,8 @@ async function updateControlMessage() {
                     embeds: [
                         old_pos_embed
                     ],
-                    components: []
+                    components: [
+                    ]
                 }
             )
         );
@@ -298,25 +330,31 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
     if (currentBotQueue.length <= 1) return;
     let pool = [];
     
+    let old_is_control_message = queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1;
+    let new_is_control_message = queue_pos_old === playerStatusObject['playlist-count'] - 1;
+
     let new_pos_embed = queueMessageList[queue_pos_new].embeds[0];
-    let new_pos_actionRow = createActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
+    let new_pos_actionRowA = createActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
+    let new_pos_actionRowB = createSeekActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
     new_pos_embed = EmbedBuilder.from(new_pos_embed).setColor(Colors.DarkRed);
 
     let old_pos_embed = queueMessageList[queue_pos_old].embeds[0];
-    let old_pos_actionRow = createActionRow(queue_pos_old, queue_pos_old === playerStatusObject['playlist-count'] - 1);
+    let old_pos_actionRowA = createActionRow(queue_pos_old, queue_pos_old === playerStatusObject['playlist-count'] - 1);
+    let old_pos_actionRowB = createSeekActionRow(queue_pos_old, queue_pos_old === playerStatusObject['playlist-count'] - 1);
     old_pos_embed = EmbedBuilder.from(old_pos_embed).setColor(Colors.DarkAqua);
     
-    if (new_pos_actionRow) {
-
+    if (new_pos_actionRowA) {
+        let componentArr = [
+            new_pos_actionRowA
+        ];
+        if (new_is_control_message) componentArr.push(new_pos_actionRowB);
         pool.push(
             queueMessageList[queue_pos_new].edit(
                 {
                     embeds: [
                         new_pos_embed
                     ],
-                    components: [
-                        new_pos_actionRow
-                    ]
+                    components: componentArr
                 }
             )
         );
@@ -335,7 +373,12 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
     }
     
 
-    if (old_pos_actionRow) {
+    if (old_pos_actionRowA) {
+
+        let componentArr = [
+            old_pos_actionRowA
+        ];
+        if (old_is_control_message) componentArr.push(old_pos_actionRowB);
 
         pool.push(
             queueMessageList[queue_pos_old].edit(
@@ -343,9 +386,7 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
                     embeds: [
                         old_pos_embed
                     ],
-                    components: [
-                        old_pos_actionRow
-                    ]
+                    components: componentArr
                 }
             )
         );
@@ -356,7 +397,8 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
                     embeds: [
                         old_pos_embed
                     ],
-                    components: []
+                    components: [
+                    ]
                 }
             )
         );
@@ -380,8 +422,8 @@ async function addToQueue(url) {
  */
 let mpvPlayer;
 let mpvOpts = {
-    verbose: true,
-    debug: true,
+    verbose: false,
+    debug: false,
     audio_only: false
 };
 if (process.platform === "win32") {
@@ -422,7 +464,7 @@ mpvPlayer.socket.on('message', async (data) => {
 
                 switch(data.name) {
                     case "playlist-pos":
-                        console.log(data);
+                        // console.log(data);
                         old_playlist_pos = cur_playlist_pos;
                         cur_playlist_pos = data.data;
                         await updateQueueIndex(cur_playlist_pos, old_playlist_pos);
@@ -468,19 +510,82 @@ client.once(Events.ClientReady, async c => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isButton()) return;
-    
-    interaction.reply({
-        ephemeral: true,
-        content: "Paused"
-        
-    }).then(() => {
-        setTimeout( () => interaction.deleteReply(), 250);
-    });
 
     let controlIDParts = interaction.customId.split('-');
     let queue_pos = Number.parseInt(controlIDParts[0]);
     let control_command = controlIDParts[1];
+
+    if (interaction.isModalSubmit()) {
+
+        let seekVal = interaction.fields.getTextInputValue(`${queue_pos}-seekmodalinput`);
+
+        let seekNumber;
+        try {
+            seekNumber = Number.parseInt(seekVal);
+        } catch (e) {
+            console.error("Non numeric input");
+            console.error(e);
+            await interaction.reply({
+                ephemeral: true,
+                content: "Invalid input"
+            }).then( () => {
+                setTimeout( () => interaction.deleteReply(), 10000);
+            });
+
+            return;
+        }
+
+        if (isNaN(seekVal)) {
+            console.error("Non numeric input");
+            await interaction.reply({
+                ephemeral: true,
+                content: "Invalid input"
+            }).then( () => {
+                setTimeout( () => interaction.deleteReply(), 10000);
+            });
+
+            return;
+        }
+
+        let playerCurrentTimePos = mpvPlayer.currentTimePos;
+        let playerMaxTimePos = playerStatusObject.duration;
+
+        if (seekNumber < 0 && playerCurrentTimePos + seekNumber < 0) {
+            //can't seek past beginning of video
+            //Set to inverse of current time index to seek to start
+            seekNumber = -playerCurrentTimePos + 10;
+        }
+        if (seekNumber + playerCurrentTimePos > playerMaxTimePos) {
+            //can't seek past end
+            //seek to end?
+            seekNumber = playerMaxTimePos - playerCurrentTimePos - 10;
+        }
+
+        mpvPlayer.seek(seekNumber);
+
+        interaction.reply({
+            ephemeral: true,
+            content: "ack"
+            
+        }).then(() => {
+            setTimeout( () => interaction.deleteReply(), 250);
+        });
+
+        return;
+    }
+
+    if (!interaction.isButton()) return;
+
+    if (control_command !== 'customseek') {
+        interaction.reply({
+            ephemeral: true,
+            content: "ack"
+            
+        }).then(() => {
+            setTimeout( () => interaction.deleteReply(), 250);
+        });
+    }
+
 
     switch (control_command) {
     case 'playpause': 
@@ -509,6 +614,35 @@ client.on(Events.InteractionCreate, async interaction => {
         } else {
             console.error("Invalid queue position");
         }
+        break;
+    case 'rev30':
+        mpvPlayer.seek(-30);
+        break;
+    case 'rev15':
+        mpvPlayer.seek(-15);
+        break;
+    case 'fwd15':
+        mpvPlayer.seek(15);
+        break;
+    case 'fwd30':
+        mpvPlayer.seek(30);
+        break;
+    case 'customseek':
+        let modal = new ModalBuilder()
+            .setCustomId(`${queue_pos}-seekmodal`)
+            .setTitle("Granular seek");
+
+        let seekInput = new TextInputBuilder()
+            .setCustomId(`${queue_pos}-seekmodalinput`)
+            .setLabel("value as seconds, negative to seek in reverse")
+            .setStyle(TextInputStyle.Short);
+        
+        let modalActionRow = new ActionRowBuilder().addComponents(seekInput);
+        
+        modal.addComponents(modalActionRow);
+
+        interaction.showModal(modal);
+
         break;
     default:
         console.log('no valid command found');
