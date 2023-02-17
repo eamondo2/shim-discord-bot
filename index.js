@@ -5,6 +5,7 @@ import ytdl from "ytdl-core";
 import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageComponentInteraction, ActionRow, Emoji, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, ModalBuilder} from "discord.js";
 import { Message } from "discord.js";
 import { Embed } from "discord.js";
+import url from "url";
 
 const conf = JSON.parse(fs.readFileSync("config.json"));
 const token = JSON.parse(fs.readFileSync("bot-token.json")).token;
@@ -58,7 +59,7 @@ async function cleanupChannel() {
     for (let messageObj of await channel.messages.fetch()) {
         let message = messageObj[1];
         console.log(`Deleting message from ${message.author.avatar}\n${message.content}`);
-        cleanupPool.push(message.delete());
+        if (message.deletable) cleanupPool.push(message.delete());
     }
 
     await Promise.all(cleanupPool);
@@ -126,6 +127,31 @@ function parseYTVideoUrl(video_url) {
 
     return null;
 
+}
+
+function verifyYTHost(video_url) {
+    let parsed;
+    try {
+        parsed = url.parse(video_url);
+    } catch (e) {
+        console.error("Invalid url per url.parse");
+        console.error(video_url, e);
+        return false;
+    }
+
+    if (!parsed) return false;
+
+    let host = parsed.host;
+    let allowedHosts = [
+        'youtube.com',
+        'youtu.be'
+    ];
+
+    if (!allowedHosts.includes(host)) {
+        return false;
+    }
+
+    return true;
 }
 
 function createSeekActionRow(queue_pos, is_control_message = false) {
@@ -455,8 +481,8 @@ async function addToQueue(url) {
  */
 let mpvPlayer;
 let mpvOpts = {
-    verbose: false,
-    debug: false,
+    verbose: true,
+    debug: true,
     audio_only: false
 };
 if (process.platform === "win32") {
@@ -534,6 +560,8 @@ const client = new Client({
     }
 });
 
+
+
 client.once(Events.ClientReady, async c => {
     console.log(`Ready, logged in as ${c.user.tag}`);
     channel = await client.channels.fetch(conf.CHANNEL_ID);
@@ -546,82 +574,87 @@ client.on(Events.InteractionCreate, async interaction => {
 
 
     if (!interaction.channel.id === conf.CHANNEL_ID) return;
+    if (!interaction.channelId === conf.CHANNEL_ID) return;
+
+    console.log(interaction);
 
     let controlIDParts = interaction.customId.split('-');
     let queue_pos = Number.parseInt(controlIDParts[0]);
     let control_command = controlIDParts[1];
 
-    if (interaction.isModalSubmit()) {
+    try {
 
-        let seekVal = interaction.fields.getTextInputValue(`${queue_pos}-seekmodalinput`);
-
-        let seekNumber;
-        try {
-            seekNumber = Number.parseInt(seekVal);
-        } catch (e) {
-            console.error("Non numeric input");
-            console.error(e);
-            await interaction.reply({
-                ephemeral: true,
-                content: "Invalid input"
-            }).then( () => {
-                setTimeout( () => interaction.deleteReply(), 10000);
+        if (!interaction.isModalSubmit()) {
+    
+            await interaction.deferReply({
+                ephemeral: true
             });
-
+        } else {
+    
+            let seekVal = interaction.fields.getTextInputValue(`${queue_pos}-seekmodalinput`);
+    
+            let seekNumber;
+            try {
+                seekNumber = Number.parseInt(seekVal);
+            } catch (e) {
+                console.error("Non numeric input");
+                console.error(e);
+                await interaction.reply({
+                    ephemeral: true,
+                    content: "Invalid input"
+                }).then( () => {
+                    setTimeout( () => interaction.deleteReply(), 10000);
+                });
+    
+                return;
+            }
+    
+            if (isNaN(seekVal)) {
+                console.error("Non numeric input");
+                await interaction.reply({
+                    ephemeral: true,
+                    content: "Invalid input"
+                }).then( () => {
+                    setTimeout( () => interaction.deleteReply(), 10000);
+                });
+    
+                return;
+            }
+    
+            let playerCurrentTimePos = mpvPlayer.currentTimePos;
+            let playerMaxTimePos = playerStatusObject.duration;
+    
+            if (seekNumber < 0 && playerCurrentTimePos + seekNumber < 0) {
+                //can't seek past beginning of video
+                //Set to inverse of current time index to seek to start
+                seekNumber = -playerCurrentTimePos + 10;
+            }
+            if (seekNumber + playerCurrentTimePos > playerMaxTimePos) {
+                //can't seek past end
+                //seek to end?
+                seekNumber = playerMaxTimePos - playerCurrentTimePos - 10;
+            }
+    
+            mpvPlayer.seek(seekNumber);
+    
+            interaction.reply({
+                ephemeral: true,
+                content: "ack"
+                
+            }).then(() => {
+                setTimeout( () => interaction.deleteReply(), 250);
+            });
+    
             return;
         }
-
-        if (isNaN(seekVal)) {
-            console.error("Non numeric input");
-            await interaction.reply({
-                ephemeral: true,
-                content: "Invalid input"
-            }).then( () => {
-                setTimeout( () => interaction.deleteReply(), 10000);
-            });
-
-            return;
-        }
-
-        let playerCurrentTimePos = mpvPlayer.currentTimePos;
-        let playerMaxTimePos = playerStatusObject.duration;
-
-        if (seekNumber < 0 && playerCurrentTimePos + seekNumber < 0) {
-            //can't seek past beginning of video
-            //Set to inverse of current time index to seek to start
-            seekNumber = -playerCurrentTimePos + 10;
-        }
-        if (seekNumber + playerCurrentTimePos > playerMaxTimePos) {
-            //can't seek past end
-            //seek to end?
-            seekNumber = playerMaxTimePos - playerCurrentTimePos - 10;
-        }
-
-        mpvPlayer.seek(seekNumber);
-
-        interaction.reply({
-            ephemeral: true,
-            content: "ack"
-            
-        }).then(() => {
-            setTimeout( () => interaction.deleteReply(), 250);
-        });
-
+    } catch (e) {
+        console.error(e);
         return;
     }
 
+
+    
     if (!interaction.isButton()) return;
-
-    if (control_command !== 'customseek') {
-        interaction.reply({
-            ephemeral: true,
-            content: "ack"
-            
-        }).then(() => {
-            setTimeout( () => interaction.deleteReply(), 250);
-        });
-    }
-
 
     switch (control_command) {
     case 'playpause': 
@@ -682,6 +715,12 @@ client.on(Events.InteractionCreate, async interaction => {
         console.log('no valid command found');
         break;
     }
+    interaction.editReply({
+        content: 'ack'
+    }).then(() => {
+        interaction.deleteReply();
+    })
+    
 
 });
 
@@ -691,39 +730,69 @@ client.on(Events.MessageCreate, async (message) => {
     if (message.channelId === conf.CHANNEL_ID) {
         console.log("message received");
         console.log(message.content);
-        if (ytdl.validateURL(message.content)) {
-            await Promise.all([
-                addToQueue(message.content),
-                message.delete()
-            ]);
-
-        } else if (message.content.includes('live') && message.content.includes('youtube.com')) {
-                //Could just be a live video shared, ytdl doesn't like those for some reason
-                console.log('re-parsing live shared video link');
-                let parsedUrl = parseYTVideoUrl(message.content);
-                let reformatUrl = `https://youtube.com/watch?v=${parsedUrl.id}`;
-                if (ytdl.validateURL(reformatUrl)) {
-                    console.log('re-parse succeeded.');
-                    await Promise.all([
-                        addToQueue(reformatUrl),
-                        message.delete()
-                    ]);
-                }
-        } else {
-            console.log("Rejecting invalid url");
-            channel.send({
-                content: "Invalid video URL. Either you sent a non-youtube link, or you sent a link to a playlist.\nCannot play full playlists at the moment.",
-                tts: false,
-                reply: {
-                    messageReference: message.id
-                }
-            }).then((reply_msg) => {
-                setTimeout(() => {
-                    reply_msg.delete();
-                    message.delete();
-                }, 20000);
-            });
+        /** @type {string | [string]} */
+        let passed_url = message.content;
+        let is_multiple = false;
+        if (message.content.includes("\n")) {
+            //possible multiline
+            is_multiple = true;
+            passed_url = passed_url.split("\n");
         }
+
+        if (!is_multiple) {
+            passed_url = [].concat([passed_url]);
+        }
+
+        let target_pool = [];
+        let process_pool = [];
+        for (let target of passed_url) {
+            if (ytdl.validateURL(target)) {
+                target_pool.push(target);
+                // await Promise.all([
+                //     addToQueue(passed_url),
+                //     message.delete()
+                // ]);
+    
+            } else if (verifyYTHost(target)) {
+                    //Could just be a live video shared, ytdl doesn't like those for some reason
+                    console.log('re-parsing possible live shared video link');
+                    let parsedUrl = parseYTVideoUrl(target);
+                    let reformatUrl = `https://youtube.com/watch?v=${parsedUrl.id}`;
+                    if (ytdl.validateURL(reformatUrl)) {
+                        console.log('re-parse succeeded.');
+                        target_pool.push(reformatUrl);
+                        // await Promise.all([
+                        //     addToQueue(reformatUrl),
+                        //     message.delete()
+                        // ]);
+                    }
+            } else {
+                console.log("Rejecting invalid url");
+                channel.send({
+                    content: "Invalid video URL. Either you sent a non-youtube link, or you sent a link to a playlist.\nCannot play full playlists at the moment.",
+                    tts: false,
+                    reply: {
+                        messageReference: message.id
+                    }
+                }).then((reply_msg) => {
+                    setTimeout(() => {
+                        reply_msg.delete();
+                        message.delete();
+                    }, 20000);
+                });
+                return;
+            }
+        }
+
+        
+        for (let target of target_pool) {
+            await addToQueue(target);
+        }
+        await message.delete();
+        
+
+
+        
     }
 });
 
