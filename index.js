@@ -575,7 +575,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (!interaction.channel.id === conf.CHANNEL_ID) return;
     if (!interaction.channelId === conf.CHANNEL_ID) return;
-
+    if (!interaction.channel.id === channel.id) return;
     console.log(interaction);
 
     let controlIDParts = interaction.customId.split('-');
