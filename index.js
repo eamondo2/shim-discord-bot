@@ -6,6 +6,7 @@ import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedB
 import { Message } from "discord.js";
 import { Embed } from "discord.js";
 import url from "url";
+import os from "os";
 
 const conf = JSON.parse(fs.readFileSync("config.json"));
 const token = JSON.parse(fs.readFileSync("bot-token.json")).token;
@@ -547,7 +548,7 @@ mpvPlayer.socket.on('message', async (data) => {
  */
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, IntentsBitField.Flags.GuildMessages, IntentsBitField.Flags.MessageContent, IntentsBitField.Flags.GuildMessageReactions],
+    intents: [GatewayIntentBits.Guilds, IntentsBitField.Flags.GuildMessages, IntentsBitField.Flags.MessageContent],
     presence: {
         status: "online",
         activities: [
@@ -557,9 +558,9 @@ const client = new Client({
 
             }
         ]
-    }
-});
+    },
 
+});
 
 
 client.once(Events.ClientReady, async c => {
@@ -715,11 +716,10 @@ client.on(Events.InteractionCreate, async interaction => {
         console.log('no valid command found');
         break;
     }
+    let machineID = `${os.hostname}-${os.userInfo}`;
     interaction.editReply({
-        content: 'ack'
-    }).then(() => {
-        interaction.deleteReply();
-    })
+        content: machineID
+    }).then(setTimeout(() => {interaction.deleteReply()}, 2000));
     
 
 });
