@@ -738,9 +738,8 @@ function setupButtonCollector() {
             console.log('no valid command found');
             break;
         }
-        let machineID = `${os.hostname}-${os.userInfo}`;
         interaction.editReply({
-            content: machineID
+            content: 'ack'
         }).then(setTimeout(() => {interaction.deleteReply()}, 2000));
         
 
