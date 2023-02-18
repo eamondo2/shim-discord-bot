@@ -482,8 +482,8 @@ async function addToQueue(url) {
  */
 let mpvPlayer;
 let mpvOpts = {
-    verbose: true,
-    debug: true,
+    verbose: false,
+    debug: false,
     audio_only: false
 };
 if (process.platform === "win32") {
@@ -598,7 +598,6 @@ function setupButtonCollector() {
 
 
     buttonCollector.on('collect', async interaction => {
-        console.log(interaction);
 
         if (!interaction.channelId === conf.CHANNEL_ID) return;        
 
