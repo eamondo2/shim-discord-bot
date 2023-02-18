@@ -2,7 +2,7 @@ import mpv from "node-mpv";
 import fs from "fs";
 import got from "got";
 import ytdl from "ytdl-core";
-import {ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageComponentInteraction, ActionRow, Emoji, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, ModalBuilder} from "discord.js";
+import { ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, EmbedBuilder, TextChannel, Colors, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageComponentInteraction, ActionRow, Emoji, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, ModalBuilder } from "discord.js";
 import { Message, InteractionCollector, MessageCollector } from "discord.js";
 import { Embed } from "discord.js";
 import url from "url";
@@ -12,7 +12,7 @@ const conf = JSON.parse(fs.readFileSync("config.json"));
 const token = JSON.parse(fs.readFileSync("bot-token.json")).token;
 
 const defaultControlList = [
-    '⏯', '⏹️', '⏮️', '⏭️', 
+    '⏯', '⏹️', '⏮️', '⏭️',
 ]
 
 const controlsEnum = {
@@ -103,25 +103,25 @@ function parseYTVideoUrl(video_url) {
     }
     if (m && m.length >= 11 && m[11]) {
         if (is_playlist) {
-            if (m[11] !== 'playlist'){
+            if (m[11] !== 'playlist') {
                 has_single_video = true;
             }
         } else {
-            return {url: `https://youtube.com/watch?v=${m[11]}`, id: m[11], is_playlist, has_single_video};
+            return { url: `https://youtube.com/watch?v=${m[11]}`, id: m[11], is_playlist, has_single_video };
         }
-        
+
     }
 
     if (is_playlist && has_single_video) {
-        return {url: `https://youtube.com/watch?v=${m[11]}`, id: m[11], is_playlist, has_single_video};
+        return { url: `https://youtube.com/watch?v=${m[11]}`, id: m[11], is_playlist, has_single_video };
     }
 
     if (!is_playlist && has_single_video) {
-        return {url: video_url, id: m[11], is_playlist, has_single_video};
+        return { url: video_url, id: m[11], is_playlist, has_single_video };
     }
 
     if (is_playlist && !has_single_video) {
-        return {url: `https://youtube.com/playlist?list=${m[16]}`, id: m[16], is_playlist, has_single_video};
+        return { url: `https://youtube.com/playlist?list=${m[16]}`, id: m[16], is_playlist, has_single_video };
     }
 
     console.log(is_playlist, has_single_video);
@@ -210,15 +210,15 @@ function createActionRow(queue_pos, is_control_message = false) {
                     .setEmoji('⏭️')
                     .setStyle(ButtonStyle.Primary)
             );
-            if (cur_playlist_pos !== queue_pos) {
+        if (cur_playlist_pos !== queue_pos) {
 
-                actionRow.addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`${queue_pos}-jumphere`)
-                        .setLabel('Jump')
-                        .setStyle(ButtonStyle.Primary)
-                )
-            }
+            actionRow.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`${queue_pos}-jumphere`)
+                    .setLabel('Jump')
+                    .setStyle(ButtonStyle.Primary)
+            )
+        }
     } else if (cur_playlist_pos !== queue_pos) {
         actionRow = new ActionRowBuilder()
             .addComponents(
@@ -227,12 +227,12 @@ function createActionRow(queue_pos, is_control_message = false) {
                     .setLabel('Jump')
                     .setStyle(ButtonStyle.Primary)
             )
-            
+
     }
 
 
     return actionRow;
-       
+
 }
 
 function createQueueEntryEmbed(thumbnail_link, video_url, video_title, video_author, queue_pos) {
@@ -246,9 +246,9 @@ function createQueueEntryEmbed(thumbnail_link, video_url, video_title, video_aut
         .setURL(video_url)
         .setThumbnail(thumbnail_link)
         .setImage(thumbnail_link);
-    
 
-    return {queue_pos, message_sent: false, embed: newEmbed, actionRowA, actionRowB};
+
+    return { queue_pos, message_sent: false, embed: newEmbed, actionRowA, actionRowB };
 
 }
 
@@ -258,7 +258,7 @@ async function processLink(url, parsed) {
     let author = ytdlInfo.videoDetails.author.name;
     let title = ytdlInfo.videoDetails.title;
     let queue_pos = currentBotQueue.length;
-    
+
     let thumbnail_link = await validateYtThumbnailUrl(parsed.id);
 
     if (!thumbnail_link) {
@@ -270,10 +270,10 @@ async function processLink(url, parsed) {
 
 
     processedLinkList.push(parsed.url);
-}   
+}
 
 async function sendQueueMessage() {
-    
+
     for (let pendingSent of currentBotQueue) {
         if (pendingSent.message_sent) continue;
         pendingSent.message_sent = true;
@@ -317,7 +317,7 @@ async function updateControlMessage() {
     let old_pos_embed = currentControlMessage.embeds[0];
     let old_pos_actionRowA = createActionRow(currentEmbedObj.queue_pos, false);
     let old_pos_actionRowB = createSeekActionRow(currentEmbedObj.queue_pos, false);
-    
+
     if (new_pos_actionRowA) {
         pool.push(
             newControlMessage.edit(
@@ -377,7 +377,7 @@ async function updateControlMessage() {
     currentEmbedObj = newEmbedObj;
 
     let results = await Promise.all(pool);
-    
+
     return;
 
 }
@@ -385,22 +385,22 @@ async function updateControlMessage() {
 async function updateQueueIndex(queue_pos_new, queue_pos_old) {
     if (currentBotQueue.length <= 1) return;
     let pool = [];
-    
-    let new_is_control_message = queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1;
+
+    let new_is_control_message = queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count'] - 1;
     let old_is_control_message = queue_pos_old === playerStatusObject['playlist-count'] - 1;
 
     console.log(old_is_control_message, new_is_control_message);
 
     let new_pos_embed = queueMessageList[queue_pos_new].embeds[0];
-    let new_pos_actionRowA = createActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
-    let new_pos_actionRowB = createSeekActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count']-1);
+    let new_pos_actionRowA = createActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count'] - 1);
+    let new_pos_actionRowB = createSeekActionRow(queue_pos_new, queue_pos_new === cur_playlist_pos && queue_pos_new === playerStatusObject['playlist-count'] - 1);
     new_pos_embed = EmbedBuilder.from(new_pos_embed).setColor(Colors.DarkRed);
 
     let old_pos_embed = queueMessageList[queue_pos_old].embeds[0];
     let old_pos_actionRowA = createActionRow(queue_pos_old, queue_pos_old === playerStatusObject['playlist-count'] - 1);
     let old_pos_actionRowB = createSeekActionRow(queue_pos_old, queue_pos_old === playerStatusObject['playlist-count'] - 1);
     old_pos_embed = EmbedBuilder.from(old_pos_embed).setColor(Colors.DarkAqua);
-    
+
     if (new_pos_actionRowA) {
         let componentArr = [
             new_pos_actionRowA
@@ -429,7 +429,7 @@ async function updateQueueIndex(queue_pos_new, queue_pos_old) {
         );
 
     }
-    
+
 
     if (old_pos_actionRowA) {
 
@@ -488,20 +488,20 @@ let mpvOpts = {
 };
 if (process.platform === "win32") {
     mpvPlayer = new mpv(
-    Object.assign(mpvOpts, {binary: "./mpv/mpv.exe"}),
-    [
-        "--force-window=immediate",
-        "--keep-open=yes",
-        "--config-dir=./mpv/portable_config"
-    ]
+        Object.assign(mpvOpts, { binary: "./mpv/mpv.exe" }),
+        [
+            "--force-window=immediate",
+            "--keep-open=yes",
+            "--config-dir=./mpv/portable_config"
+        ]
     );
 } else {
     mpvPlayer = new mpv(mpvOpts,
-    [
-        "--force-window=immediate",
-        "--keep-open=yes",
-        "--config-dir=./mpv/portable_config"
-    ]
+        [
+            "--force-window=immediate",
+            "--keep-open=yes",
+            "--config-dir=./mpv/portable_config"
+        ]
     );
 }
 
@@ -520,15 +520,15 @@ mpvPlayer.socket.on('message', async (data) => {
                     mpvPlayer.resume();
                 }
                 break;
-            case "property-change": 
+            case "property-change":
 
-                switch(data.name) {
+                switch (data.name) {
                     case "playlist-pos":
                         // console.log(data);
                         old_playlist_pos = cur_playlist_pos;
                         cur_playlist_pos = data.data;
                         await updateQueueIndex(cur_playlist_pos, old_playlist_pos);
-                        break;        
+                        break;
                     default:
                         break;
                 }
@@ -538,7 +538,7 @@ mpvPlayer.socket.on('message', async (data) => {
         }
     }
 
-}); 
+});
 
 
 /**
@@ -576,172 +576,186 @@ client.once(Events.ClientReady, async c => {
     channel = await client.channels.fetch(conf.CHANNEL_ID);
     //Initial channel cleanup, purge old control message.
     await cleanupChannel();
-    
+
     setupMessageCollector();
     setupButtonCollector();
 
 
-    
+
 });
 
+async function handleModalSubmit(interaction) {
+
+    if (!interaction.channelId === conf.CHANNEL_ID) return;
+
+    let controlIDParts = interaction.customId.split('-');
+    let queue_pos = Number.parseInt(controlIDParts[0]);
+    let control_command = controlIDParts[1];
+
+    if (!control_command === 'seekmodalinput') return;
+
+    let seekVal = interaction.fields.getTextInputValue(`${queue_pos}-seekmodalinput`);
+
+    let seekNumber;
+    try {
+        seekNumber = Number.parseInt(seekVal);
+    } catch (e) {
+        console.error("Non numeric input");
+        console.error(e);
+        await interaction.reply({
+            ephemeral: true,
+            content: "Invalid input"
+        }).then(() => {
+            setTimeout(() => interaction.deleteReply(), 10000);
+        });
+
+        return;
+    }
+
+    if (isNaN(seekVal)) {
+        console.error("Non numeric input");
+        await interaction.reply({
+            ephemeral: true,
+            content: "Invalid input"
+        }).then(() => {
+            setTimeout(() => interaction.deleteReply(), 10000);
+        });
+
+        return;
+    }
+
+    let playerCurrentTimePos = mpvPlayer.currentTimePos;
+    let playerMaxTimePos = playerStatusObject.duration;
+
+    if (seekNumber < 0 && playerCurrentTimePos + seekNumber < 0) {
+        //can't seek past beginning of video
+        //Set to inverse of current time index to seek to start
+        seekNumber = -playerCurrentTimePos + 10;
+    }
+    if (seekNumber + playerCurrentTimePos > playerMaxTimePos) {
+        //can't seek past end
+        //seek to end?
+        seekNumber = playerMaxTimePos - playerCurrentTimePos - 10;
+    }
+
+    mpvPlayer.seek(seekNumber);
+
+    interaction.reply({
+        ephemeral: true,
+        content: "ack"
+
+    }).then(() => {
+        setTimeout(() => interaction.deleteReply(), 250);
+    });
+
+    return;
+}
+
 function setupButtonCollector() {
-    
+
     buttonCollector = channel.createMessageComponentCollector({
         filter,
         dispose: false
-        
+
     });
-    
+
     buttonCollector.on('end', () => {
         setupButtonCollector();
     });
 
-
     buttonCollector.on('collect', async interaction => {
 
-        if (!interaction.channelId === conf.CHANNEL_ID) return;        
+        if (!interaction.channelId === conf.CHANNEL_ID) return;
 
         let controlIDParts = interaction.customId.split('-');
         let queue_pos = Number.parseInt(controlIDParts[0]);
         let control_command = controlIDParts[1];
 
-        try {
+        if (!interaction.isModalSubmit() && control_command !== 'customseek') {
 
-            if (!interaction.isModalSubmit()) {
-        
-                await interaction.deferReply({
-                    ephemeral: true
-                });
-            } else {
-        
-                let seekVal = interaction.fields.getTextInputValue(`${queue_pos}-seekmodalinput`);
-        
-                let seekNumber;
-                try {
-                    seekNumber = Number.parseInt(seekVal);
-                } catch (e) {
-                    console.error("Non numeric input");
-                    console.error(e);
-                    await interaction.reply({
-                        ephemeral: true,
-                        content: "Invalid input"
-                    }).then( () => {
-                        setTimeout( () => interaction.deleteReply(), 10000);
-                    });
-        
-                    return;
-                }
-        
-                if (isNaN(seekVal)) {
-                    console.error("Non numeric input");
-                    await interaction.reply({
-                        ephemeral: true,
-                        content: "Invalid input"
-                    }).then( () => {
-                        setTimeout( () => interaction.deleteReply(), 10000);
-                    });
-        
-                    return;
-                }
-        
-                let playerCurrentTimePos = mpvPlayer.currentTimePos;
-                let playerMaxTimePos = playerStatusObject.duration;
-        
-                if (seekNumber < 0 && playerCurrentTimePos + seekNumber < 0) {
-                    //can't seek past beginning of video
-                    //Set to inverse of current time index to seek to start
-                    seekNumber = -playerCurrentTimePos + 10;
-                }
-                if (seekNumber + playerCurrentTimePos > playerMaxTimePos) {
-                    //can't seek past end
-                    //seek to end?
-                    seekNumber = playerMaxTimePos - playerCurrentTimePos - 10;
-                }
-        
-                mpvPlayer.seek(seekNumber);
-        
-                interaction.reply({
-                    ephemeral: true,
-                    content: "ack"
-                    
-                }).then(() => {
-                    setTimeout( () => interaction.deleteReply(), 250);
-                });
-        
-                return;
-            }
-        } catch (e) {
-            console.error(e);
-            return;
+            await interaction.deferReply({
+                ephemeral: true
+            });
         }
 
-
-        
         if (!interaction.isButton()) return;
 
         switch (control_command) {
-        case 'playpause': 
-            mpvPlayer.togglePause();
-            break;
-        case 'stop':
-            mpvPlayer.stop();
-            currentBotQueue = [];
-            processedLinkList = [];
-            queueMessageList = [];
-            currentControlMessage = null;
-            cleanupChannel();
+            case 'playpause':
+                mpvPlayer.togglePause();
+                break;
+            case 'stop':
+                mpvPlayer.stop();
+                currentBotQueue = [];
+                processedLinkList = [];
+                queueMessageList = [];
+                currentControlMessage = null;
+                cleanupChannel();
 
-            return;
-        case 'prev':
-            mpvPlayer.prev();
-            break;
-        case 'next':
-            mpvPlayer.next();
-            break;
-        case 'jumphere': 
-            if (queue_pos <= currentBotQueue.length - 1) {
-                mpvPlayer.socket.command("playlist-play-index", [queue_pos]);
-            } else {
-                console.error("Invalid queue position");
-            }
-            break;
-        case 'rev30':
-            mpvPlayer.seek(-30);
-            break;
-        case 'rev15':
-            mpvPlayer.seek(-15);
-            break;
-        case 'fwd15':
-            mpvPlayer.seek(15);
-            break;
-        case 'fwd30':
-            mpvPlayer.seek(30);
-            break;
-        case 'customseek':
-            let modal = new ModalBuilder()
-                .setCustomId(`${queue_pos}-seekmodal`)
-                .setTitle("Granular seek");
+                break;
+            case 'prev':
+                mpvPlayer.prev();
+                break;
+            case 'next':
+                mpvPlayer.next();
+                break;
+            case 'jumphere':
+                if (queue_pos <= currentBotQueue.length - 1) {
+                    mpvPlayer.socket.command("playlist-play-index", [queue_pos]);
+                } else {
+                    console.error("Invalid queue position");
+                }
+                break;
+            case 'rev30':
+                mpvPlayer.seek(-30);
+                break;
+            case 'rev15':
+                mpvPlayer.seek(-15);
+                break;
+            case 'fwd15':
+                mpvPlayer.seek(15);
+                break;
+            case 'fwd30':
+                mpvPlayer.seek(30);
+                break;
+            case 'customseek':
+                let modal = new ModalBuilder()
+                    .setCustomId(`${queue_pos}-seekmodal`)
+                    .setTitle("Granular seek");
 
-            let seekInput = new TextInputBuilder()
-                .setCustomId(`${queue_pos}-seekmodalinput`)
-                .setLabel("value as seconds, negative to seek in reverse")
-                .setStyle(TextInputStyle.Short);
-            
-            let modalActionRow = new ActionRowBuilder().addComponents(seekInput);
-            
-            modal.addComponents(modalActionRow);
+                let seekInput = new TextInputBuilder()
+                    .setCustomId(`${queue_pos}-seekmodalinput`)
+                    .setLabel("value as seconds, negative to seek in reverse")
+                    .setStyle(TextInputStyle.Short);
 
-            interaction.showModal(modal);
+                let modalActionRow = new ActionRowBuilder().addComponents(seekInput);
 
-            break;
-        default:
-            console.log('no valid command found');
-            break;
+                modal.addComponents(modalActionRow);
+
+                await interaction.showModal(modal);
+
+                let submitted = await interaction.awaitModalSubmit({
+                    time: 60000,
+                    filter: i => i.user.id === interaction.user.id
+                }).catch(error => {
+                    console.error(error);
+                    return;
+                });
+
+                if (submitted) {
+                    await handleModalSubmit(submitted);
+                }
+
+                return;
+            default:
+                console.log('no valid command found');
+                break;
         }
+
         interaction.editReply({
             content: 'ack'
-        }).then(setTimeout(() => {interaction.deleteReply()}, 2000));
-        
+        }).then(setTimeout(() => { interaction.deleteReply() }, 250));
+
 
     });
 
@@ -772,11 +786,11 @@ function setupMessageCollector() {
                 is_multiple = true;
                 passed_url = passed_url.split("\n");
             }
-    
+
             if (!is_multiple) {
                 passed_url = [].concat([passed_url]);
             }
-    
+
             let target_pool = [];
             let process_pool = [];
             for (let target of passed_url) {
@@ -786,20 +800,20 @@ function setupMessageCollector() {
                     //     addToQueue(passed_url),
                     //     message.delete()
                     // ]);
-        
+
                 } else if (verifyYTHost(target)) {
-                        //Could just be a live video shared, ytdl doesn't like those for some reason
-                        console.log('re-parsing possible live shared video link');
-                        let parsedUrl = parseYTVideoUrl(target);
-                        let reformatUrl = `https://youtube.com/watch?v=${parsedUrl.id}`;
-                        if (ytdl.validateURL(reformatUrl)) {
-                            console.log('re-parse succeeded.');
-                            target_pool.push(reformatUrl);
-                            // await Promise.all([
-                            //     addToQueue(reformatUrl),
-                            //     message.delete()
-                            // ]);
-                        }
+                    //Could just be a live video shared, ytdl doesn't like those for some reason
+                    console.log('re-parsing possible live shared video link');
+                    let parsedUrl = parseYTVideoUrl(target);
+                    let reformatUrl = `https://youtube.com/watch?v=${parsedUrl.id}`;
+                    if (ytdl.validateURL(reformatUrl)) {
+                        console.log('re-parse succeeded.');
+                        target_pool.push(reformatUrl);
+                        // await Promise.all([
+                        //     addToQueue(reformatUrl),
+                        //     message.delete()
+                        // ]);
+                    }
                 } else {
                     console.log("Rejecting invalid url");
                     channel.send({
@@ -817,16 +831,16 @@ function setupMessageCollector() {
                     return;
                 }
             }
-    
-            
+
+
             for (let target of target_pool) {
                 await addToQueue(target);
             }
             await message.delete();
-            
-    
-    
-            
+
+
+
+
         }
     });
 }
