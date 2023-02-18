@@ -560,6 +560,7 @@ const client = new Client({
         ]
     },
 
+
 });
 
 
@@ -573,11 +574,12 @@ client.once(Events.ClientReady, async c => {
 
 client.on(Events.InteractionCreate, async interaction => {
 
+    console.log(interaction);
 
     if (!interaction.channel.id === conf.CHANNEL_ID) return;
-    if (!interaction.channelId === conf.CHANNEL_ID) return;
     if (!interaction.channel.id === channel.id) return;
-    console.log(interaction);
+    if (!interaction.message.channelId === conf.CHANNEL_ID) return;
+    
 
     let controlIDParts = interaction.customId.split('-');
     let queue_pos = Number.parseInt(controlIDParts[0]);
