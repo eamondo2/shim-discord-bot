@@ -8,6 +8,11 @@ import { Embed } from "discord.js";
 import url from "url";
 import os from "os";
 
+
+import ShimAPIServer from "./app.js";
+
+const shimAPIServerInstance = new ShimAPIServer();
+
 const conf = JSON.parse(fs.readFileSync("config.json"));
 const token = JSON.parse(fs.readFileSync("bot-token.json")).token;
 
@@ -475,6 +480,8 @@ async function addToQueue(url) {
     await updateControlMessage();
 }
 
+shimAPIServerInstance.hookMpvShim(addToQueue);
+
 /**
  * ===================================
  * MPV Player events/handling
@@ -492,7 +499,7 @@ if (process.platform === "win32") {
         [
             "--force-window=immediate",
             "--keep-open=yes",
-            "--config-dir=./mpv/portable_config"
+            "--config-dir=./mpv/portable_config",
         ]
     );
 } else {
